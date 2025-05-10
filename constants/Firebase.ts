@@ -4,13 +4,15 @@ import { getFirestore } from 'firebase/firestore';
 
 // Tu configuración de Firebase
 const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_AUTH_DOMAIN",
-  projectId: "TU_PROJECT_ID",
-  storageBucket: "TU_STORAGE_BUCKET",
-  messagingSenderId: "TU_MESSAGING_SENDER_ID",
-  appId: "TU_APP_ID"
-};
+    apiKey: "AIzaSyCteijLZVyf4MkXkMb5LrwFjHvsVlYl_TU",
+    authDomain: "glysmart-9b2f4.firebaseapp.com",
+    projectId: "glysmart-9b2f4",
+    storageBucket: "glysmart-9b2f4.firebasestorage.app",
+    messagingSenderId: "252264375633",
+    appId: "1:252264375633:web:61e2192a837c8823cf5f70",
+    measurementId: "G-5RK6BYDWP5"
+  };
+  
 
 // Inicializar Firebase
 const app = initializeApp(firebaseConfig);
