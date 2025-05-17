@@ -1,70 +1,62 @@
-import React from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
-import { LineChart } from 'react-native-chart-kit';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { Card, Text } from 'react-native-paper';
-import { useAuth } from '../../hooks/useAuth';
-import { useGlucose } from '../../hooks/useGlucose';
+import { LogoHeader } from '../../components/LogoHeader';
+import { GlucoseRecord, useGlucoseLocal } from '../../hooks/useGlucoseLocal';
 
 export default function HistoryScreen() {
-  const { user } = useAuth();
-  const { records, loading } = useGlucose(user?.uid || '');
+  const { getRecords } = useGlucoseLocal();
+  const [records, setRecords] = useState<GlucoseRecord[]>([]);
 
-  const chartData = {
-    labels: records.slice(0, 7).map(record => 
-      new Date(record.timestamp.seconds * 1000).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })
-    ).reverse(),
-    datasets: [{
-      data: records.slice(0, 7).map(record => record.value).reverse(),
-    }],
+  useEffect(() => {
+    loadRecords();
+  }, []);
+
+  const loadRecords = async () => {
+    const data = await getRecords();
+    setRecords(data);
+  };
+
+  const getCategory = (value: number) => {
+    if (value < 70) return { label: 'Bajo', color: '#FFC107' };
+    if (value > 180) return { label: 'Alto', color: '#F44336' };
+    return { label: 'Normal', color: '#4CAF50' };
   };
 
   return (
     <View style={styles.container}>
-      <Text variant="headlineMedium" style={styles.title}>Historial</Text>
-      
-      <Card style={styles.chartCard}>
-        <Card.Content>
-          <Text variant="titleMedium" style={styles.chartTitle}>
-            Últimos 7 días
-          </Text>
-          <LineChart
-            data={chartData}
-            width={Dimensions.get('window').width - 40}
-            height={220}
-            chartConfig={{
-              backgroundColor: '#ffffff',
-              backgroundGradientFrom: '#ffffff',
-              backgroundGradientTo: '#ffffff',
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(10, 126, 164, ${opacity})`,
-              style: {
-                borderRadius: 16,
-              },
-            }}
-            bezier
-            style={styles.chart}
-          />
-        </Card.Content>
-      </Card>
+      <View style={styles.fixedHeader}>
+        <LogoHeader />
+        <Text variant="headlineMedium" style={styles.title}>Historial</Text>
+      </View>
 
-      <View style={styles.recordsList}>
-        {records.map((record) => (
-          <Card key={record.id} style={styles.recordCard}>
-            <Card.Content>
-              <Text variant="titleMedium">
-                {record.value} mg/dL
-              </Text>
-              <Text variant="bodyMedium">
-                {new Date(record.timestamp.seconds * 1000).toLocaleString('es-ES')}
-              </Text>
-              {record.notes && (
-                <Text variant="bodySmall" style={styles.notes}>
-                  {record.notes}
-                </Text>
-              )}
-            </Card.Content>
-          </Card>
-        ))}
+      <View style={styles.scrollContainer}>
+        <ScrollView style={styles.content}>
+          {records.map((record) => {
+            const category = getCategory(record.value);
+            return (
+              <Card key={record.id} style={styles.card}>
+                <Card.Content>
+                  <View style={styles.recordHeader}>
+                    <Text variant="titleLarge" style={[styles.value, { color: category.color }]}>
+                      {record.value} mg/dL
+                    </Text>
+                    <Text style={[styles.category, { color: category.color }]}>
+                      {category.label}
+                    </Text>
+                  </View>
+                  <Text style={styles.timestamp}>
+                    {new Date(record.timestamp).toLocaleString()}
+                  </Text>
+                </Card.Content>
+              </Card>
+            );
+          })}
+
+          {records.length === 0 && (
+            <Text style={styles.emptyText}>No hay registros</Text>
+          )}
+        </ScrollView>
       </View>
     </View>
   );
@@ -73,31 +65,58 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#fff',
+  },
+  fixedHeader: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1,
+    backgroundColor: '#fff',
+    paddingTop: 20,
+    paddingBottom: 10,
+  },
+  scrollContainer: {
+    flex: 1,
+    marginTop: 210,
+  },
+  content: {
+    flex: 1,
     padding: 20,
   },
   title: {
+    color: '#1565C0',
     textAlign: 'center',
     marginBottom: 20,
+    fontWeight: 'bold',
+    fontSize: 28,
   },
-  chartCard: {
-    marginBottom: 20,
+  card: {
+    marginBottom: 10,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
   },
-  chartTitle: {
+  recordHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  value: {
+    fontWeight: 'bold',
+  },
+  category: {
+    fontWeight: '500',
+  },
+  timestamp: {
+    color: '#2196F3',
+    marginTop: 8,
+    fontSize: 14,
+  },
+  emptyText: {
+    color: '#666',
     textAlign: 'center',
-    marginBottom: 10,
-  },
-  chart: {
-    marginVertical: 8,
-    borderRadius: 16,
-  },
-  recordsList: {
-    gap: 10,
-  },
-  recordCard: {
-    marginBottom: 10,
-  },
-  notes: {
-    marginTop: 5,
-    fontStyle: 'italic',
+    fontSize: 16,
+    marginTop: 20,
   },
 }); 

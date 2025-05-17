@@ -1,57 +1,80 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Button, Text, TextInput } from 'react-native-paper';
-import { useAuth } from '../../hooks/useAuth';
+import { Button, SegmentedButtons, Text, TextInput } from 'react-native-paper';
+import { useLocalStorage } from '../../hooks/useLocalStorage';
 
 export default function RegisterScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [age, setAge] = useState('');
+  const [diabetesType, setDiabetesType] = useState<'1' | '2' | undefined>();
   const router = useRouter();
-  const { register } = useAuth();
+  const { saveUserProfile } = useLocalStorage();
 
   const handleRegister = async () => {
+    if (!name.trim()) {
+      alert('Por favor ingresa tu nombre');
+      return;
+    }
+
+    const ageNumber = parseInt(age);
+    if (isNaN(ageNumber) || ageNumber <= 0) {
+      alert('Por favor ingresa una edad válida');
+      return;
+    }
+
     try {
-      await register(email, password, name);
+      await saveUserProfile({
+        name,
+        age: ageNumber,
+        diabetesType
+      });
       router.replace('/(tabs)');
     } catch (error) {
-      console.error('Error al registrarse:', error);
+      console.error('Error al guardar perfil:', error);
+      alert('Error al guardar el perfil');
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text variant="headlineMedium" style={styles.title}>Crear Cuenta</Text>
+      <Text variant="headlineMedium" style={styles.title}>GlySmart</Text>
+      
       <TextInput
         label="Nombre"
         value={name}
         onChangeText={setName}
         style={styles.input}
       />
+
       <TextInput
-        label="Correo electrónico"
-        value={email}
-        onChangeText={setEmail}
-        style={styles.input}
-        autoCapitalize="none"
-      />
-      <TextInput
-        label="Contraseña"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
+        label="Edad"
+        value={age}
+        onChangeText={setAge}
+        keyboardType="numeric"
         style={styles.input}
       />
-      <Button mode="contained" onPress={handleRegister} style={styles.button}>
-        Registrarse
-      </Button>
+
+      <Text variant="bodyMedium" style={styles.label}>
+        Tipo de Diabetes (Opcional)
+      </Text>
+      
+      <SegmentedButtons
+        value={diabetesType || ''}
+        onValueChange={value => setDiabetesType(value as '1' | '2' | undefined)}
+        buttons={[
+          { value: '1', label: 'Tipo 1' },
+          { value: '2', label: 'Tipo 2' },
+        ]}
+        style={styles.segmentedButtons}
+      />
+
       <Button 
-        mode="text" 
-        onPress={() => router.push('/login')}
+        mode="contained" 
+        onPress={handleRegister}
         style={styles.button}
       >
-        ¿Ya tienes cuenta? Inicia sesión
+        Continuar
       </Button>
     </View>
   );
@@ -69,6 +92,12 @@ const styles = StyleSheet.create({
   },
   input: {
     marginBottom: 15,
+  },
+  label: {
+    marginBottom: 10,
+  },
+  segmentedButtons: {
+    marginBottom: 20,
   },
   button: {
     marginTop: 10,

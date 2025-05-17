@@ -1,232 +1,208 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Timestamp } from 'firebase/firestore';
-import React, { useState } from 'react';
-import { Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { Button, Card, Modal, Portal, SegmentedButtons, Text, TextInput } from 'react-native-paper';
-import { useAuth } from '../../hooks/useAuth';
-import { Reminder, useReminders } from '../../hooks/useReminders';
-import { validateReminder } from '../../hooks/useValidation';
+import React, { useEffect, useState } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
+import { Button, Card, Modal, Portal, Text, TextInput } from 'react-native-paper';
+import { LogoHeader } from '../../components/LogoHeader';
+import { Reminder, useRemindersLocal } from '../../hooks/useRemindersLocal';
 
 export default function RemindersScreen() {
-  const { user } = useAuth();
-  const { 
-    reminders, 
-    loading, 
-    createReminder, 
-    updateReminder, 
-    deleteReminder,
-    getUpcomingReminders,
-    getRemindersByFrequency,
-    toggleReminder
-  } = useReminders(user?.uid || '');
-  
+  const { saveReminder, getReminders, deleteReminder } = useRemindersLocal();
+  const [reminders, setReminders] = useState<Reminder[]>([]);
   const [visible, setVisible] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [time, setTime] = useState(new Date());
-  const [frequency, setFrequency] = useState<Reminder['frequency']>('once');
-  const [errors, setErrors] = useState<string[]>([]);
-  const [filter, setFilter] = useState<Reminder['frequency'] | 'all'>('all');
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [date, setDate] = useState(new Date());
+  const [showDate, setShowDate] = useState(false);
+  const [showTime, setShowTime] = useState(false);
 
-  const handleCreateReminder = async () => {
-    const validationErrors = validateReminder({ title, time, frequency });
-    if (validationErrors.length > 0) {
-      setErrors(validationErrors);
+  useEffect(() => {
+    loadReminders();
+  }, []);
+
+  const loadReminders = async () => {
+    const data = await getReminders();
+    setReminders(data.sort((a, b) => a.time - b.time));
+  };
+
+  const handleCreate = async () => {
+    if (!title.trim()) {
+      alert('El título es obligatorio');
       return;
     }
-
-    try {
-      await createReminder({
-        title,
-        description,
-        time: Timestamp.fromDate(new Date(time)),
-        frequency,
-        active: true
-      });
-      setVisible(false);
-      resetForm();
-    } catch (error) {
-      setErrors(['Error al crear el recordatorio']);
-    }
-  };
-
-  const resetForm = () => {
+    await saveReminder({
+      title,
+      description,
+      time: date.getTime(),
+    });
+    setVisible(false);
     setTitle('');
     setDescription('');
-    setTime(new Date());
-    setFrequency('once');
-    setErrors([]);
+    setDate(new Date());
+    loadReminders();
   };
 
-  const handleDateChange = (event: any, selectedDate?: Date) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setTime(selectedDate);
-    }
+  const handleDelete = async (id: string) => {
+    await deleteReminder(id);
+    loadReminders();
   };
 
-  const handleTimeChange = (event: any, selectedTime?: Date) => {
-    setShowTimePicker(false);
-    if (selectedTime) {
-      const newTime = new Date(time);
-      newTime.setHours(selectedTime.getHours());
-      newTime.setMinutes(selectedTime.getMinutes());
-      setTime(newTime);
-    }
+  const getRemindersByStatus = () => {
+    const now = Date.now();
+    return {
+      active: reminders.filter(r => r.time > now),
+      completed: reminders.filter(r => r.time <= now)
+    };
   };
 
-  const filteredReminders = filter === 'all' 
-    ? getUpcomingReminders()
-    : getRemindersByFrequency(filter);
+  const { active, completed } = getRemindersByStatus();
 
   return (
     <View style={styles.container}>
-      <Text variant="headlineMedium" style={styles.title}>Recordatorios</Text>
+      <LogoHeader />
       
+      <Text variant="headlineMedium" style={styles.title}>Recordatorios</Text>
       <Button 
         mode="contained" 
-        onPress={() => setVisible(true)}
+        onPress={() => setVisible(true)} 
         style={styles.addButton}
+        buttonColor="#1565C0"
       >
-        Agregar Recordatorio
+        Crear recordatorio
       </Button>
 
-      <SegmentedButtons
-        value={filter}
-        onValueChange={value => setFilter(value as Reminder['frequency'] | 'all')}
-        buttons={[
-          { value: 'all', label: 'Todos' },
-          { value: 'daily', label: 'Diarios' },
-          { value: 'weekly', label: 'Semanales' },
-          { value: 'monthly', label: 'Mensuales' },
-        ]}
-        style={styles.filter}
-      />
+      <View style={styles.remindersContainer}>
+        {active.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Próximos recordatorios</Text>
+            {active.map((reminder) => (
+              <Card key={reminder.id} style={styles.card}>
+                <Card.Content>
+                  <Text style={styles.reminderTitle}>{reminder.title}</Text>
+                  {reminder.description && (
+                    <Text style={styles.reminderDescription}>{reminder.description}</Text>
+                  )}
+                  <Text style={styles.reminderTime}>
+                    {new Date(reminder.time).toLocaleString()}
+                  </Text>
+                </Card.Content>
+                <Card.Actions>
+                  <Button 
+                    onPress={() => handleDelete(reminder.id)} 
+                    textColor="#F44336"
+                  >
+                    Eliminar
+                  </Button>
+                </Card.Actions>
+              </Card>
+            ))}
+          </View>
+        )}
 
-      <ScrollView>
-        {filteredReminders.map((reminder) => (
-          <Card key={reminder.id} style={styles.card}>
-            <Card.Content>
-              <Text variant="titleMedium">{reminder.title}</Text>
-              <Text variant="bodyMedium">{reminder.description}</Text>
-              <Text variant="bodySmall">
-                {new Date(reminder.time.seconds * 1000).toLocaleString()}
-              </Text>
-              <Text variant="bodySmall">Frecuencia: {reminder.frequency}</Text>
-            </Card.Content>
-            <Card.Actions>
-              <Button 
-                onPress={() => updateReminder(reminder.id, { active: !reminder.active })}
-              >
-                {reminder.active ? 'Desactivar' : 'Activar'}
-              </Button>
-              <Button 
-                onPress={() => deleteReminder(reminder.id)}
-                textColor="red"
-              >
-                Eliminar
-              </Button>
-            </Card.Actions>
-          </Card>
-        ))}
-      </ScrollView>
+        {completed.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Recordatorios cumplidos</Text>
+            {completed.map((reminder) => (
+              <Card key={reminder.id} style={[styles.card, styles.completedCard]}>
+                <Card.Content>
+                  <Text style={[styles.reminderTitle, styles.completedText]}>{reminder.title}</Text>
+                  {reminder.description && (
+                    <Text style={[styles.reminderDescription, styles.completedText]}>{reminder.description}</Text>
+                  )}
+                  <Text style={[styles.reminderTime, styles.completedText]}>
+                    {new Date(reminder.time).toLocaleString()}
+                  </Text>
+                </Card.Content>
+                <Card.Actions>
+                  <Button 
+                    onPress={() => handleDelete(reminder.id)} 
+                    textColor="#F44336"
+                  >
+                    Eliminar
+                  </Button>
+                </Card.Actions>
+              </Card>
+            ))}
+          </View>
+        )}
+
+        {reminders.length === 0 && (
+          <Text style={styles.emptyText}>No hay recordatorios</Text>
+        )}
+      </View>
 
       <Portal>
-        <Modal
-          visible={visible}
-          onDismiss={() => {
-            setVisible(false);
-            resetForm();
-          }}
+        <Modal 
+          visible={visible} 
+          onDismiss={() => setVisible(false)} 
           contentContainerStyle={styles.modal}
         >
-          <Text variant="headlineSmall" style={styles.modalTitle}>
-            Nuevo Recordatorio
-          </Text>
-          
-          {errors.length > 0 && (
-            <View style={styles.errorContainer}>
-              {errors.map((error, index) => (
-                <Text key={index} style={styles.errorText}>
-                  {error}
-                </Text>
-              ))}
-            </View>
-          )}
-
+          <Text style={styles.modalTitle}>Nuevo recordatorio</Text>
           <TextInput
             label="Título"
             value={title}
             onChangeText={setTitle}
             style={styles.input}
-            error={errors.includes('El título es requerido')}
+            mode="outlined"
+            activeOutlineColor="#1565C0"
+            outlineColor="#2196F3"
           />
-          
           <TextInput
-            label="Descripción"
+            label="Descripción (opcional)"
             value={description}
             onChangeText={setDescription}
-            multiline
             style={styles.input}
+            mode="outlined"
+            activeOutlineColor="#1565C0"
+            outlineColor="#2196F3"
+            multiline
+            numberOfLines={3}
           />
-
-          <View style={styles.dateTimeContainer}>
-            <Button 
-              mode="outlined" 
-              onPress={() => setShowDatePicker(true)}
-              style={styles.dateTimeButton}
-            >
-              Fecha: {time.toLocaleDateString()}
-            </Button>
-            
-            <Button 
-              mode="outlined" 
-              onPress={() => setShowTimePicker(true)}
-              style={styles.dateTimeButton}
-            >
-              Hora: {time.toLocaleTimeString()}
-            </Button>
-          </View>
-
-          {(showDatePicker || Platform.OS === 'ios') && (
+          <Button 
+            mode="outlined" 
+            onPress={() => setShowDate(true)} 
+            style={styles.input}
+            textColor="#1565C0"
+          >
+            Fecha: {date.toLocaleDateString()}
+          </Button>
+          <Button 
+            mode="outlined" 
+            onPress={() => setShowTime(true)} 
+            style={styles.input}
+            textColor="#1565C0"
+          >
+            Hora: {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Button>
+          {showDate && (
             <DateTimePicker
-              value={time}
+              value={date}
               mode="date"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleDateChange}
+              onChange={(_, selected) => {
+                setShowDate(false);
+                if (selected) setDate(new Date(date.setFullYear(selected.getFullYear(), selected.getMonth(), selected.getDate())));
+              }}
               minimumDate={new Date()}
             />
           )}
-
-          {(showTimePicker || Platform.OS === 'ios') && (
+          {showTime && (
             <DateTimePicker
-              value={time}
+              value={date}
               mode="time"
               display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-              onChange={handleTimeChange}
+              onChange={(_, selected) => {
+                setShowTime(false);
+                if (selected) setDate(new Date(date.setHours(selected.getHours(), selected.getMinutes())));
+              }}
             />
           )}
-
-          <SegmentedButtons
-            value={frequency}
-            onValueChange={value => setFrequency(value as Reminder['frequency'])}
-            buttons={[
-              { value: 'once', label: 'Una vez' },
-              { value: 'daily', label: 'Diario' },
-              { value: 'weekly', label: 'Semanal' },
-              { value: 'monthly', label: 'Mensual' },
-            ]}
-            style={styles.frequencyButtons}
-          />
-
           <Button 
             mode="contained" 
-            onPress={handleCreateReminder}
-            style={styles.modalButton}
+            onPress={handleCreate} 
+            style={styles.saveButton}
+            buttonColor="#1565C0"
           >
-            Crear Recordatorio
+            Guardar
           </Button>
         </Modal>
       </Portal>
@@ -238,56 +214,86 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
+    backgroundColor: '#fff',
   },
   title: {
-    textAlign: 'center',
+    color: '#1565C0',
     marginBottom: 20,
+    textAlign: 'center',
+    fontWeight: 'bold',
+    fontSize: 28,
   },
   addButton: {
     marginBottom: 20,
+    width: '80%',
+    alignSelf: 'center',
+  },
+  remindersContainer: {
+    flex: 1,
+    width: '90%',
+    alignSelf: 'center',
   },
   card: {
     marginBottom: 10,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+  },
+  reminderTitle: {
+    color: '#1565C0',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  reminderDescription: {
+    color: '#666',
+    marginTop: 5,
+    fontSize: 16,
+  },
+  reminderTime: {
+    color: '#2196F3',
+    marginTop: 5,
+    fontSize: 14,
   },
   modal: {
-    backgroundColor: 'white',
+    backgroundColor: '#fff',
     padding: 20,
     margin: 20,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   modalTitle: {
+    color: '#1565C0',
+    fontSize: 24,
     textAlign: 'center',
     marginBottom: 20,
+    fontWeight: 'bold',
   },
   input: {
     marginBottom: 15,
+    backgroundColor: '#fff',
   },
-  modalButton: {
+  saveButton: {
     marginTop: 10,
   },
-  errorContainer: {
-    backgroundColor: '#ffebee',
-    padding: 10,
-    borderRadius: 4,
-    marginBottom: 15,
+  section: {
+    marginBottom: 20,
   },
-  errorText: {
-    color: '#c62828',
-    marginBottom: 5,
+  sectionTitle: {
+    color: '#1565C0',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    marginLeft: 5,
   },
-  filter: {
-    marginBottom: 15,
+  completedCard: {
+    backgroundColor: '#F5F5F5',
+    opacity: 0.8,
   },
-  frequencyButtons: {
-    marginBottom: 15,
+  completedText: {
+    color: '#666',
   },
-  dateTimeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 15,
-  },
-  dateTimeButton: {
-    flex: 1,
-    marginHorizontal: 5,
+  emptyText: {
+    color: '#666',
+    textAlign: 'center',
+    fontSize: 16,
+    marginTop: 20,
   },
 }); 
