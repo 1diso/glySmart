@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Card, Text } from 'react-native-paper';
 import { LogoHeader } from '../../components/LogoHeader';
@@ -7,14 +8,28 @@ import { GlucoseRecord, useGlucoseLocal } from '../../hooks/useGlucoseLocal';
 export default function HistoryScreen() {
   const { getRecords } = useGlucoseLocal();
   const [records, setRecords] = useState<GlucoseRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadRecords();
-  }, []);
+  // Usar useFocusEffect para recargar los datos cada vez que la pantalla recibe el foco
+  useFocusEffect(
+    React.useCallback(() => {
+      loadRecords();
+      return () => {};
+    }, [])
+  );
 
   const loadRecords = async () => {
-    const data = await getRecords();
-    setRecords(data);
+    try {
+      setLoading(true);
+      const data = await getRecords();
+      // Ordenar por fecha, del más reciente al más antiguo
+      data.sort((a, b) => b.timestamp - a.timestamp);
+      setRecords(data);
+    } catch (error) {
+      console.error('Error al cargar registros:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getCategory = (value: number) => {
@@ -25,14 +40,16 @@ export default function HistoryScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.fixedHeader}>
+      <View style={styles.headerContainer}>
         <LogoHeader />
         <Text variant="headlineMedium" style={styles.title}>Historial</Text>
       </View>
 
-      <View style={styles.scrollContainer}>
-        <ScrollView style={styles.content}>
-          {records.map((record) => {
+      <ScrollView style={styles.content}>
+        {loading && records.length === 0 ? (
+          <Text style={styles.loadingText}>Cargando registros...</Text>
+        ) : records.length > 0 ? (
+          records.map((record) => {
             const category = getCategory(record.value);
             return (
               <Card key={record.id} style={styles.card}>
@@ -48,16 +65,19 @@ export default function HistoryScreen() {
                   <Text style={styles.timestamp}>
                     {new Date(record.timestamp).toLocaleString()}
                   </Text>
+                  {record.notes && (
+                    <Text style={styles.notes}>
+                      Notas: {record.notes}
+                    </Text>
+                  )}
                 </Card.Content>
               </Card>
             );
-          })}
-
-          {records.length === 0 && (
-            <Text style={styles.emptyText}>No hay registros</Text>
-          )}
-        </ScrollView>
-      </View>
+          })
+        ) : (
+          <Text style={styles.emptyText}>No hay registros</Text>
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -67,19 +87,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  fixedHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 1,
+  headerContainer: {
     backgroundColor: '#fff',
     paddingTop: 20,
     paddingBottom: 10,
-  },
-  scrollContainer: {
-    flex: 1,
-    marginTop: 210,
   },
   content: {
     flex: 1,
@@ -88,7 +99,7 @@ const styles = StyleSheet.create({
   title: {
     color: '#1565C0',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 15,
     fontWeight: 'bold',
     fontSize: 28,
   },
@@ -96,6 +107,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     backgroundColor: '#E3F2FD',
     borderRadius: 12,
+    elevation: 3,
   },
   recordHeader: {
     flexDirection: 'row',
@@ -113,8 +125,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 14,
   },
+  notes: {
+    color: '#666',
+    marginTop: 5,
+    fontSize: 14,
+    fontStyle: 'italic',
+  },
   emptyText: {
     color: '#666',
+    textAlign: 'center',
+    fontSize: 16,
+    marginTop: 20,
+  },
+  loadingText: {
+    color: '#1565C0',
     textAlign: 'center',
     fontSize: 16,
     marginTop: 20,

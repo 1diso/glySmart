@@ -2,25 +2,33 @@ import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { PaperProvider } from 'react-native-paper';
-import 'react-native-reanimated';
+import { Text } from 'react-native';
+import { MD3LightTheme, Provider as PaperProvider } from 'react-native-paper';
 
 export default function RootLayout() {
-  const [loaded] = useFonts({
+  const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
 
-  if (!loaded) return null;
+  if (!loaded) {
+    return <Text>Cargando fuentes...</Text>;
+  }
+
+  if (error) {
+    console.error('Error al cargar fuentes:', error);
+    return <Text>Error al cargar la aplicación</Text>;
+  }
 
   return (
-    <ThemeProvider value={DefaultTheme}>
-      <PaperProvider>
+    <PaperProvider theme={MD3LightTheme}>
+      <ThemeProvider value={DefaultTheme}>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="+not-found" />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="+not-found" options={{ title: 'No encontrado' }} />
         </Stack>
-      </PaperProvider>
-      <StatusBar style="dark" />
-    </ThemeProvider>
+        <StatusBar style="dark" />
+      </ThemeProvider>
+    </PaperProvider>
   );
 }

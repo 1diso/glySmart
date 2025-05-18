@@ -1,6 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCallback } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+
+// Reemplazar el uso de uuid con una función simple para generar IDs únicos
+function generateSimpleId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
+}
 
 export type GlucoseRecord = {
   id: string;
@@ -12,7 +16,8 @@ export type GlucoseRecord = {
 export function useGlucoseLocal() {
   const saveRecord = useCallback(async (record: Omit<GlucoseRecord, 'id'>) => {
     try {
-      const id = uuidv4();
+      // Usar nuestra función de generación de ID en lugar de uuidv4()
+      const id = generateSimpleId();
       const newRecord: GlucoseRecord = { ...record, id };
       const stored = await AsyncStorage.getItem('glucose_records');
       const records: GlucoseRecord[] = stored ? JSON.parse(stored) : [];

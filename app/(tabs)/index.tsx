@@ -1,5 +1,6 @@
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Card, Text } from 'react-native-paper';
 import { LogoHeader } from '../../components/LogoHeader';
@@ -15,21 +16,39 @@ export default function HomeScreen() {
   const router = useRouter();
   const { getRecords } = useGlucoseLocal();
   const [records, setRecords] = useState<GlucoseRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadRecords();
-  }, []);
+  // Usar useFocusEffect para recargar los datos cada vez que la pantalla recibe el foco
+  useFocusEffect(
+    useCallback(() => {
+      loadRecords();
+      return () => {};
+    }, [])
+  );
 
   const loadRecords = async () => {
-    const data = await getRecords();
-    setRecords(data);
+    try {
+      setLoading(true);
+      const data = await getRecords();
+      
+      // Ordenamos los registros del más reciente al más antiguo
+      const sortedData = [...data].sort((a, b) => b.timestamp - a.timestamp);
+      setRecords(sortedData);
+    } catch (error) {
+      console.error('Error al cargar registros:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getLatestGlucose = () => {
     if (!records.length) return { value: 'No hay registros', category: { label: '', color: '#666' } };
+    
+    // Como ya ordenamos los registros, el primero es el más reciente
     const latest = records[0];
     return {
       value: `${latest.value} mg/dL`,
+      timestamp: new Date(latest.timestamp).toLocaleString(),
       category: getCategory(latest.value)
     };
   };
@@ -51,39 +70,54 @@ export default function HomeScreen() {
       
       <Text variant="headlineMedium" style={styles.title}>Bienvenido a GlySmart</Text>
       
-      <Card style={styles.card}>
-        <Card.Content>
-          <Text variant="titleMedium" style={styles.cardTitle}>Último registro</Text>
-          <Text variant="displaySmall" style={[styles.glucoseValue, { color: getLatestGlucose().category.color }]}>
-            {getLatestGlucose().value}
-          </Text>
-          {getLatestGlucose().category.label && (
-            <Text style={[styles.category, { color: getLatestGlucose().category.color }]}>
-              {getLatestGlucose().category.label}
-            </Text>
-          )}
-        </Card.Content>
-      </Card>
-
-      <View style={styles.statsContainer}>
-        <Card style={styles.statsCard}>
+      {loading && records.length === 0 ? (
+        <Card style={styles.card}>
           <Card.Content>
-            <Text variant="titleMedium" style={styles.cardTitle}>Promedio</Text>
-            <Text variant="headlineSmall" style={styles.statsValue}>
-              {getAverageGlucose()}
-            </Text>
+            <Text style={styles.loadingText}>Cargando datos...</Text>
           </Card.Content>
         </Card>
+      ) : (
+        <>
+          <Card style={styles.card}>
+            <Card.Content>
+              <Text variant="titleMedium" style={styles.cardTitle}>Último registro</Text>
+              <Text variant="displaySmall" style={[styles.glucoseValue, { color: getLatestGlucose().category.color }]}>
+                {getLatestGlucose().value}
+              </Text>
+              {getLatestGlucose().category.label && (
+                <Text style={[styles.category, { color: getLatestGlucose().category.color }]}>
+                  {getLatestGlucose().category.label}
+                </Text>
+              )}
+              {records.length > 0 && (
+                <Text style={styles.timestamp}>
+                  {getLatestGlucose().timestamp}
+                </Text>
+              )}
+            </Card.Content>
+          </Card>
 
-        <Card style={styles.statsCard}>
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.cardTitle}>Registros esta semana</Text>
-            <Text variant="headlineSmall" style={styles.statsValue}>
-              {getLastWeekRecords()}
-            </Text>
-          </Card.Content>
-        </Card>
-      </View>
+          <View style={styles.statsContainer}>
+            <Card style={styles.statsCard}>
+              <Card.Content>
+                <Text variant="titleMedium" style={styles.cardTitle}>Promedio</Text>
+                <Text variant="headlineSmall" style={styles.statsValue}>
+                  {getAverageGlucose()}
+                </Text>
+              </Card.Content>
+            </Card>
+
+            <Card style={styles.statsCard}>
+              <Card.Content>
+                <Text variant="titleMedium" style={styles.cardTitle}>Registros esta semana</Text>
+                <Text variant="headlineSmall" style={styles.statsValue}>
+                  {getLastWeekRecords()}
+                </Text>
+              </Card.Content>
+            </Card>
+          </View>
+        </>
+      )}
 
       <View style={styles.actions}>
         <Button 
@@ -146,6 +180,18 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 5,
     fontWeight: 'bold',
+  },
+  timestamp: {
+    textAlign: 'center',
+    color: '#757575',
+    fontSize: 14,
+    marginTop: 8,
+  },
+  loadingText: {
+    textAlign: 'center',
+    color: '#1565C0',
+    fontSize: 16,
+    padding: 20,
   },
   statsContainer: {
     flexDirection: 'row',
